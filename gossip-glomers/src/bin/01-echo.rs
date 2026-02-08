@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         let input: Message = serde_json::from_str(&line?)?;
-        let mut body: Payload = serde_json::from_value(input.body)?;
+        let body: Payload = serde_json::from_value(input.body)?;
 
         let reply_type = match body.msg_type.as_str() {
             "init" => "init_ok",
