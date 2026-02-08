@@ -4,43 +4,65 @@ use maelstrom_node::{Node, Result, Runtime};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-//messages coming into node
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum Request {
-    Echo { echo: String, msg_id: u64 },
-    Init { msg_id: u64 },
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
+enum Payload {
+    Echo {
+        echo: String,
+        msg_id: usize,
+    },
+    EchoOk {
+        echo: String,
+        in_reply_to: usize,
+    },
+    Init {
+        node_id: String,
+        node_ids: Vec<String>,
+        msg_id: usize,
+    },
+    InitOk {
+        in_reply_to: usize,
+    },
 }
 
-//messages going out of node
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum Response {
-    EchoOk { echo: String, in_reply_to: u64 },
-    InitOk { in_reply_to: u64 },
-}
-
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct EchoHandler;
 
 #[async_trait]
 impl Node for EchoHandler {
     async fn process(&self, runtime: Runtime, req: Message) -> Result<()> {
-        let body: Request = req.body.as_obj()?;
+        let body: Payload = match req.body.as_obj() {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("ERROR: Deserialization failed: {}", e);
+                return Ok(());
+            }
+        };
+
         match body {
-            Request::Echo { echo, msg_id } => {
-                runtime.reply(req, Response::EchoOk { echo, in_reply_to: msg_id }).await
+            Payload::Init { msg_id, .. } => {
+                let reply = Payload::InitOk {
+                    in_reply_to: msg_id,
+                };
+                runtime.reply(req, reply).await?;
             }
-            Request::Init { msg_id } => {
-                runtime.reply(req, Response::InitOk { in_reply_to: msg_id }).await
+            Payload::Echo { echo, msg_id } => {
+                let reply = Payload::EchoOk {
+                    echo,
+                    in_reply_to: msg_id,
+                };
+                runtime.reply(req, reply).await?;
             }
+            _ => {}
         }
+        Ok(())
     }
 }
 
-pub fn main() -> Result<()> {
+fn main() -> Result<()> {
     Runtime::init(async {
-        let handler = Arc::new(EchoHandler);
+        let handler = Arc::new(EchoHandler::default());
         Runtime::new().with_handler(handler).run().await
     })
 }
