@@ -1,68 +1,49 @@
-use async_trait::async_trait;
-use maelstrom_node::protocol::Message;
-use maelstrom_node::{Node, Result, Runtime};
+use std::io::{self, BufRead};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
-enum Payload {
-    Echo {
-        echo: String,
-        msg_id: usize,
-    },
-    EchoOk {
-        echo: String,
-        in_reply_to: usize,
-    },
-    Init {
-        node_id: String,
-        node_ids: Vec<String>,
-        msg_id: usize,
-    },
-    InitOk {
-        in_reply_to: usize,
-    },
+#[derive(Serialize, Deserialize)]
+struct Message {
+    src: String,
+    dest: String,
+    body: serde_json::Value,
 }
 
-#[derive(Default)]
-struct EchoHandler;
+#[derive(Serialize, Deserialize)]
+struct Payload {
+    #[serde(rename = "type")]
+    msg_type: String,
+    msg_id: Option<usize>,
+    in_reply_to: Option<usize>,
+    #[serde(flatten)]
+    extra: serde_json::Value,
+}
 
-#[async_trait]
-impl Node for EchoHandler {
-    async fn process(&self, runtime: Runtime, req: Message) -> Result<()> {
-        let body: Payload = match req.body.as_obj() {
-            Ok(b) => b,
-            Err(e) => {
-                eprintln!("ERROR: Deserialization failed: {}", e);
-                return Ok(());
-            }
+fn main() -> anyhow::Result<()> {
+    let stdin = io::stdin();
+    for line in stdin.lock().lines() {
+        let input: Message = serde_json::from_str(&line?)?;
+        let mut body: Payload = serde_json::from_value(input.body)?;
+
+        let reply_type = match body.msg_type.as_str() {
+            "init" => "init_ok",
+            "echo" => "echo_ok",
+            _ => continue,
         };
 
-        match body {
-            Payload::Init { msg_id, .. } => {
-                let reply = Payload::InitOk {
-                    in_reply_to: msg_id,
-                };
-                runtime.reply(req, reply).await?;
-            }
-            Payload::Echo { echo, msg_id } => {
-                let reply = Payload::EchoOk {
-                    echo,
-                    in_reply_to: msg_id,
-                };
-                runtime.reply(req, reply).await?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-}
+        let reply_body = Payload {
+            msg_type: reply_type.to_string(),
+            in_reply_to: body.msg_id,
+            msg_id: Some(0), 
+            extra: body.extra,
+        };
 
-fn main() -> Result<()> {
-    Runtime::init(async {
-        let handler = Arc::new(EchoHandler::default());
-        Runtime::new().with_handler(handler).run().await
-    })
+        let reply = Message {
+            src: input.dest,
+            dest: input.src,
+            body: serde_json::to_value(reply_body)?,
+        };
+
+        println!("{}", serde_json::to_string(&reply)?);
+    }
+    Ok(())
 }
