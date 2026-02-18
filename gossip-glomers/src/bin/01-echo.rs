@@ -1,49 +1,71 @@
-use std::io::{self, BufRead};
+use maelstrom_common::{run, HandleMessage, Envelope};
 use serde::{Deserialize, Serialize};
+use core::panic;
 
-#[derive(Serialize, Deserialize)]
-struct Message {
-    src: String,
-    dest: String,
-    body: serde_json::Value,
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Message {
+    #[serde(rename = "init")]
+    Init {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        msg_id: Option<usize>,
+        node_id: String
+    },
+    #[serde(rename = "echo")]
+    Echo {
+        echo: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        msg_id: Option<usize>
+    },
+    #[serde(rename = "init_ok")]
+    InitOk {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        in_reply_to: Option<usize>
+    },
+    #[serde(rename = "echo_ok")]
+    EchoOk {
+        echo: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        in_reply_to: Option<usize>
+    },
 }
 
-#[derive(Serialize, Deserialize)]
-struct Payload {
-    #[serde(rename = "type")]
-    msg_type: String,
-    msg_id: Option<usize>,
-    in_reply_to: Option<usize>,
-    #[serde(flatten)]
-    extra: serde_json::Value,
+#[derive(Debug, Default)]
+pub struct Echo {
+    node_id: Option<String>,
 }
 
-fn main() -> anyhow::Result<()> {
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        let input: Message = serde_json::from_str(&line?)?;
-        let body: Payload = serde_json::from_value(input.body)?;
+impl HandleMessage for Echo {
+    type Message = Message;
+    type Error = std::io::Error;
 
-        let reply_type = match body.msg_type.as_str() {
-            "init" => "init_ok",
-            "echo" => "echo_ok",
-            _ => continue,
-        };
-
-        let reply_body = Payload {
-            msg_type: reply_type.to_string(),
-            in_reply_to: body.msg_id,
-            msg_id: Some(0), 
-            extra: body.extra,
-        };
-
-        let reply = Message {
-            src: input.dest,
-            dest: input.src,
-            body: serde_json::to_value(reply_body)?,
-        };
-
-        println!("{}", serde_json::to_string(&reply)?);
+    fn handle_message(
+        &mut self,
+        msg: Envelope<Self::Message>,
+        outbound_msg_tx: std::sync::mpsc::Sender<Envelope<Self::Message>>,
+    ) -> Result<(), Self::Error> {
+        match msg.body {
+            Message::Init { msg_id, ref node_id } => {
+                self.node_id = Some(node_id.clone());
+                outbound_msg_tx.send(
+                    msg.reply(Message::InitOk { in_reply_to: msg_id })
+                ).unwrap();
+                Ok(())
+            },
+            Message::Echo { ref echo, msg_id } => {
+                outbound_msg_tx.send(
+                    msg.reply(
+                    Message::EchoOk { echo: echo.to_owned(), in_reply_to: msg_id }
+                    )
+                ).unwrap();
+                Ok(())
+            },
+            _ => panic!("{}", format!("Unexpected message: {:#?}", serde_json::to_string_pretty(&msg)))
+        }
     }
-    Ok(())
 }
+
+fn main() {
+    run(Echo::default());
+}
+

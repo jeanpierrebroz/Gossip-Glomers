@@ -53,6 +53,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "maelstrom-common",
  "serde",
  "serde_json",
  "tokio",
@@ -77,6 +78,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
 dependencies = [
  "scopeguard",
+]
+
+[[package]]
+name = "maelstrom-common"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6acffbad19000b4624c1299e061ac604a8b894d5b9c48bba454688f1350d3ec"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
