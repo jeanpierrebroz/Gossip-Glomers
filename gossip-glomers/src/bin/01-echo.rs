@@ -66,6 +66,6 @@ impl HandleMessage for Echo {
 }
 
 fn main() {
-    run(Echo::default());
+    let _ = run(Echo::default());
 }
 
