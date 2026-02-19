@@ -11,7 +11,7 @@ pub enum Message {
     InitOk { in_reply_to: Option<usize> },
 
     #[serde(rename = "broadcast")]
-    Broadcast { in_reply_to: Option<usize>, message: u32 },
+    Broadcast { message: i32, msg_id: Option<usize> },
     #[serde(rename = "broadcast_ok")]
     BroadcastOk { in_reply_to: Option<usize> },
 
@@ -21,15 +21,16 @@ pub enum Message {
     ReadOk { messages: Vec<i32>, in_reply_to: Option<usize> },
 
     #[serde(rename = "topology")]
-    Topology { topology: std::collections::HashMap<String, Vec<String>> },
+    Topology { topology: std::collections::HashMap<String, Vec<String>>, msg_id: Option<usize> },
     #[serde(rename = "topology_ok")]
-    TopologyOk { in_reply_to: Option<usize> }
+    TopologyOk { in_reply_to: Option<usize>}
 }
 
 #[derive(Debug, Default)]
 pub struct Broadcast {
     node_id: String,
-    counter: u32
+    messages: Vec<i32>,
+    toplogy: Vec<String>
 }
 
 impl HandleMessage for Broadcast {
@@ -50,10 +51,29 @@ impl HandleMessage for Broadcast {
                 Ok(())
             },
 
-            Message::Broadcast { msg_id } => {
+            Message::Topology { msg_id, ref topology } => {
+                if let Some(my_neighbors) = topology.get(&self.node_id) {
+                    self.toplogy = my_neighbors.clone(); 
+                }
                 outbound_msg_tx.send(
-                    msg.reply(
-                    )
+                    msg.reply(Message::TopologyOk { in_reply_to: msg_id })
+                ).unwrap();
+                Ok(())
+            },
+
+            Message::Read { msg_id } => {
+                outbound_msg_tx.send(
+                    msg.reply(Message::ReadOk { messages: self.messages.clone(), in_reply_to: Some(msg_id)})
+                ).unwrap();
+                Ok(())
+            },
+
+            Message::Broadcast { msg_id , message} => {
+                
+                self.messages.push(message);
+
+                outbound_msg_tx.send(
+                    msg.reply(Message::BroadcastOk { in_reply_to: msg_id })
                 ).unwrap();
                 Ok(())
             },
@@ -63,6 +83,6 @@ impl HandleMessage for Broadcast {
 }
 
 fn main() {
-    let _ = run(UID::default());
+    let _ = run(Broadcast::default());
 }
 
