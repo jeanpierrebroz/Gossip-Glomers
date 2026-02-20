@@ -1,6 +1,8 @@
 use maelstrom_common::{run, HandleMessage, Envelope};
 use serde::{Deserialize, Serialize};
-use core::panic;
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -29,8 +31,17 @@ pub enum Message {
 #[derive(Debug, Default)]
 pub struct Broadcast {
     node_id: String,
-    messages: Vec<i32>,
-    toplogy: Vec<String>
+    messages: HashSet<i32>,
+    successfully_sent_messages: HashSet<i32>,
+    pending_messages: HashMap<i32, PendingMessage>,
+    toplogy: Vec<String>,
+
+}
+
+#[derive(Debug)]
+pub struct PendingMessage {
+    message: Envelope<Message>,
+    time_sent: Instant
 }
 
 impl HandleMessage for Broadcast {
@@ -62,21 +73,31 @@ impl HandleMessage for Broadcast {
             },
 
             Message::Read { msg_id } => {
+                let vec = Vec::from_iter(self.messages.iter().cloned());
+
                 outbound_msg_tx.send(
-                    msg.reply(Message::ReadOk { messages: self.messages.clone(), in_reply_to: Some(msg_id)})
+                    msg.reply(Message::ReadOk { messages: vec, in_reply_to: Some(msg_id)})
                 ).unwrap();
                 Ok(())
             },
 
             Message::Broadcast { msg_id , message} => {
-                
-                self.messages.push(message);
+                let recieved = self.messages.insert(message);
 
                 outbound_msg_tx.send(
                     msg.reply(Message::BroadcastOk { in_reply_to: msg_id })
                 ).unwrap();
+
+                if !recieved && !self.successfully_sent_messages.contains(&message) {
+                    for i in self.toplogy.clone(){
+                        outbound_msg_tx.send(
+                            msg.reply(Message::Broadcast { message, msg_id })
+                        ).unwrap();
+                    }
+                }
                 Ok(())
             },
+
             _ => panic!("{}", format!("Unexpected message: {:#?}", serde_json::to_string_pretty(&msg)))
         }
     }
