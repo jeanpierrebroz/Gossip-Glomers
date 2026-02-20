@@ -1,6 +1,7 @@
 use maelstrom_common::{run, HandleMessage, Envelope};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::time::Instant;
 
 
@@ -33,15 +34,16 @@ pub struct Broadcast {
     node_id: String,
     messages: HashSet<i32>,
     successfully_sent_messages: HashSet<i32>,
-    pending_messages: HashMap<i32, PendingMessage>,
+    pending_messages: HashMap<usize, PendingMessage>,
     toplogy: Vec<String>,
-
+    counter: usize,
 }
 
 #[derive(Debug)]
 pub struct PendingMessage {
-    message: Envelope<Message>,
-    time_sent: Instant
+    message: Message,
+    time_sent: Instant,
+    dest: String
 }
 
 impl HandleMessage for Broadcast {
@@ -59,6 +61,7 @@ impl HandleMessage for Broadcast {
                 outbound_msg_tx.send(
                     msg.reply(Message::InitOk { in_reply_to: msg_id })
                 ).unwrap();
+                self.counter = 0;
                 Ok(())
             },
 
@@ -89,14 +92,32 @@ impl HandleMessage for Broadcast {
                 ).unwrap();
 
                 if !recieved && !self.successfully_sent_messages.contains(&message) {
-                    for i in self.toplogy.clone(){
+                    
+                    for i in &self.toplogy{
+                        let id = self.counter;
+                        let msg = Message::Broadcast { message, msg_id: Some(id) };
+                        let envelope: Envelope<Message> = Envelope{src: self.node_id.clone(), dest: i.clone(), body: Message::Broadcast { message, msg_id: Some(id) }};
+                        self.counter+=1;
+
+                        let pending_message = PendingMessage{message: msg, time_sent: Instant::now(), dest: i.clone() };
+                        self.pending_messages.insert(id, pending_message);
+
                         outbound_msg_tx.send(
-                            msg.reply(Message::Broadcast { message, msg_id })
+                            envelope
                         ).unwrap();
+
+                        
                     }
                 }
                 Ok(())
             },
+
+            Message::BroadcastOk { in_reply_to } => {
+                if let Some(id) = in_reply_to {
+                    self.pending_messages.remove(&(id as usize));
+                }
+                Ok(())
+            }
 
             _ => panic!("{}", format!("Unexpected message: {:#?}", serde_json::to_string_pretty(&msg)))
         }
