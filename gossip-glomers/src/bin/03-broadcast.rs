@@ -1,15 +1,18 @@
-use maelstrom_common::{run, HandleMessage, Envelope};
+use maelstrom_common::{Envelope, HandleMessage, run};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::time::{Instant, Duration};
+use std::sync::mpsc::Sender;
 use std::thread;
-
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum Message {
     #[serde(rename = "init")]
-    Init { msg_id: Option<usize>, node_id: String },
+    Init {
+        msg_id: Option<usize>,
+        node_id: String,
+    },
     #[serde(rename = "init_ok")]
     InitOk { in_reply_to: Option<usize> },
 
@@ -21,32 +24,37 @@ pub enum Message {
     #[serde(rename = "read")]
     Read { msg_id: usize },
     #[serde(rename = "read_ok")]
-    ReadOk { messages: Vec<i32>, in_reply_to: Option<usize> },
+    ReadOk {
+        messages: Vec<i32>,
+        in_reply_to: Option<usize>,
+    },
 
     #[serde(rename = "topology")]
-    Topology { topology: std::collections::HashMap<String, Vec<String>>, msg_id: Option<usize> },
+    Topology {
+        topology: HashMap<String, Vec<String>>,
+        msg_id: Option<usize>,
+    },
     #[serde(rename = "topology_ok")]
-    TopologyOk { in_reply_to: Option<usize>},
+    TopologyOk { in_reply_to: Option<usize> },
 
     #[serde(rename = "tick")]
-    Tick { },
+    Tick {},
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingMessage {
+    message: i32,
+    time_sent: Instant,
+    dest: String,
 }
 
 #[derive(Debug, Default)]
 pub struct Broadcast {
     node_id: String,
     messages: HashSet<i32>,
-    successfully_sent_messages: HashSet<i32>,
     pending_messages: HashMap<usize, PendingMessage>,
-    toplogy: Vec<String>,
+    topology: Vec<String>,
     counter: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct PendingMessage {
-    message: Message,
-    time_sent: Instant,
-    dest: String
 }
 
 impl HandleMessage for Broadcast {
@@ -56,102 +64,141 @@ impl HandleMessage for Broadcast {
     fn handle_message(
         &mut self,
         msg: Envelope<Self::Message>,
-        outbound_msg_tx: std::sync::mpsc::Sender<Envelope<Self::Message>>,
+        outbound_msg_tx: Sender<Envelope<Self::Message>>,
     ) -> Result<(), Self::Error> {
-
         match msg.body {
-            Message::Init { msg_id, ref node_id } => {
+            Message::Init {
+                msg_id,
+                ref node_id,
+            } => {
                 self.node_id = node_id.clone();
-                outbound_msg_tx.send(
-                    msg.reply(Message::InitOk { in_reply_to: msg_id })
-                ).unwrap();
                 self.counter = 0;
-                Ok(())
-            },
 
-            Message::Topology { msg_id, ref topology } => {
-                if let Some(my_neighbors) = topology.get(&self.node_id) {
-                    self.toplogy = my_neighbors.clone(); 
-                }
-                outbound_msg_tx.send(
-                    msg.reply(Message::TopologyOk { in_reply_to: msg_id })
-                ).unwrap();
-                Ok(())
-            },
+                let node_id_clone = self.node_id.clone();
+                let outbound_clone = outbound_msg_tx.clone();
 
-            Message::Read { msg_id } => {
-                let vec = Vec::from_iter(self.messages.iter().cloned());
-
-                outbound_msg_tx.send(
-                    msg.reply(Message::ReadOk { messages: vec, in_reply_to: Some(msg_id)})
-                ).unwrap();
-                Ok(())
-            },
-
-            Message::Broadcast { msg_id , message} => {
-                let recieved = self.messages.insert(message);
-
-                outbound_msg_tx.send(
-                    msg.reply(Message::BroadcastOk { in_reply_to: msg_id })
-                ).unwrap();
-
-                if !recieved && !self.successfully_sent_messages.contains(&message) {
-                    
-                    for i in &self.toplogy{
-                        let id = self.counter;
-                        let msg = Message::Broadcast { message, msg_id: Some(id) };
-                        let envelope: Envelope<Message> = Envelope{src: self.node_id.clone(), dest: i.clone(), body: Message::Broadcast { message, msg_id: Some(id) }};
-                        self.counter+=1;
-
-                        let pending_message = PendingMessage{message: msg, time_sent: Instant::now(), dest: i.clone() };
-                        self.pending_messages.insert(id, pending_message);
-
-                        outbound_msg_tx.send(
-                            envelope
-                        ).unwrap();                        
+                thread::spawn(move || {
+                    loop {
+                        thread::sleep(Duration::from_millis(500));
+                        let _ = outbound_clone.send(Envelope {
+                            src: node_id_clone.clone(),
+                            dest: node_id_clone.clone(),
+                            body: Message::Tick {},
+                        });
                     }
-                }
-                Ok(())
-            },
+                });
 
-            Message::BroadcastOk { in_reply_to } => {
-                if let Some(id) = in_reply_to {
-                    self.pending_messages.remove(&(id as usize));
-                }
-                Ok(())
-            },
-
-            Message::Tick {  } => {
-                //resend anything in here that's outside of the timeout, probably just reuse the broadcast logic
-                let now = Instant::now();
-
-                for el in &mut self.pending_messages {
-                    if el.1.time_sent < now - Duration::from_millis(500) {
-                        el.1.time_sent = Instant::now();
-                        outbound_msg_tx.send(
-                            msg.reply(el.1.message.clone())
-                        ).unwrap();
-                    }
-                }
+                outbound_msg_tx
+                    .send(msg.reply(Message::InitOk {
+                        in_reply_to: msg_id,
+                    }))
+                    .unwrap();
 
                 Ok(())
             }
 
-            _ => panic!("{}", format!("Unexpected message: {:#?}", serde_json::to_string_pretty(&msg)))
+            Message::Topology {
+                msg_id,
+                ref topology,
+            } => {
+                if let Some(my_neighbors) = topology.get(&self.node_id) {
+                    self.topology = my_neighbors.clone();
+                }
+                outbound_msg_tx
+                    .send(msg.reply(Message::TopologyOk {
+                        in_reply_to: msg_id,
+                    }))
+                    .unwrap();
+                Ok(())
+            }
+
+            Message::Read { msg_id } => {
+                let vec = Vec::from_iter(self.messages.iter().cloned());
+                outbound_msg_tx
+                    .send(msg.reply(Message::ReadOk {
+                        messages: vec,
+                        in_reply_to: Some(msg_id),
+                    }))
+                    .unwrap();
+                Ok(())
+            }
+
+            Message::Broadcast { msg_id, message } => {
+                let is_new = self.messages.insert(message);
+
+                outbound_msg_tx
+                    .send(msg.reply(Message::BroadcastOk {
+                        in_reply_to: msg_id,
+                    }))
+                    .unwrap();
+
+                if is_new {
+                    for neighbor in &self.topology {
+                        let id = self.counter;
+                        self.counter += 1;
+
+                        let pending = PendingMessage {
+                            message,
+                            time_sent: Instant::now(),
+                            dest: neighbor.clone(),
+                        };
+                        self.pending_messages.insert(id, pending);
+
+                        outbound_msg_tx
+                            .send(Envelope {
+                                src: self.node_id.clone(),
+                                dest: neighbor.clone(),
+                                body: Message::Broadcast {
+                                    message,
+                                    msg_id: Some(id),
+                                },
+                            })
+                            .unwrap();
+                    }
+                }
+                Ok(())
+            }
+
+            Message::BroadcastOk { in_reply_to } => {
+                if let Some(id) = in_reply_to {
+                    self.pending_messages.remove(&id);
+                }
+                Ok(())
+            }
+
+            Message::Tick {} => {
+                let now = Instant::now();
+                let timeout = Duration::from_millis(500);
+
+                for (id, pending) in &mut self.pending_messages {
+                    if now.duration_since(pending.time_sent) >= timeout {
+                        pending.time_sent = Instant::now();
+                        outbound_msg_tx
+                            .send(Envelope {
+                                src: self.node_id.clone(),
+                                dest: pending.dest.clone(),
+                                body: Message::Broadcast {
+                                    message: pending.message,
+                                    msg_id: Some(*id),
+                                },
+                            })
+                            .unwrap();
+                    }
+                }
+                Ok(())
+            }
+
+            _ => panic!(
+                "{}",
+                format!(
+                    "Unexpected message: {:#?}",
+                    serde_json::to_string_pretty(&msg)
+                )
+            ),
         }
     }
 }
 
-fn tick() {
-    loop {
-        //add tick message publish here
-        let dur = Duration::from_millis(500);
-        thread::sleep(dur);
-    }
-}
-
 fn main() {
-    thread::spawn(tick);
     let _ = run(Broadcast::default());
 }
-
