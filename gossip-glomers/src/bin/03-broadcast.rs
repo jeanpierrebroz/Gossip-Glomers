@@ -122,7 +122,7 @@ impl HandleMessage for Broadcast {
             },
 
             Message::Tick {  } => {
-                //resend anything in here that's outside of the timeout
+                //resend anything in here that's outside of the timeout, probably just reuse the broadcast logic
                 let now = Instant::now();
 
                 for el in &mut self.pending_messages {
