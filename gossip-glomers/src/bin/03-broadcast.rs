@@ -1,8 +1,8 @@
 use maelstrom_common::{run, HandleMessage, Envelope};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::env;
-use std::time::Instant;
+use std::time::{Instant, Duration};
+use std::thread;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,7 +26,10 @@ pub enum Message {
     #[serde(rename = "topology")]
     Topology { topology: std::collections::HashMap<String, Vec<String>>, msg_id: Option<usize> },
     #[serde(rename = "topology_ok")]
-    TopologyOk { in_reply_to: Option<usize>}
+    TopologyOk { in_reply_to: Option<usize>},
+
+    #[serde(rename = "tick")]
+    Tick { },
 }
 
 #[derive(Debug, Default)]
@@ -124,7 +127,16 @@ impl HandleMessage for Broadcast {
     }
 }
 
+fn tick() {
+    loop {
+        //add tick message publish here
+        let dur = Duration::from_millis(500);
+        thread::sleep(dur);
+    }
+}
+
 fn main() {
+    thread::spawn(tick);
     let _ = run(Broadcast::default());
 }
 
