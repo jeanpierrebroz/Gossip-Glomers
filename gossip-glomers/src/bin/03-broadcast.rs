@@ -5,7 +5,7 @@ use std::time::{Instant, Duration};
 use std::thread;
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum Message {
     #[serde(rename = "init")]
@@ -42,7 +42,7 @@ pub struct Broadcast {
     counter: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PendingMessage {
     message: Message,
     time_sent: Instant,
@@ -58,6 +58,7 @@ impl HandleMessage for Broadcast {
         msg: Envelope<Self::Message>,
         outbound_msg_tx: std::sync::mpsc::Sender<Envelope<Self::Message>>,
     ) -> Result<(), Self::Error> {
+
         match msg.body {
             Message::Init { msg_id, ref node_id } => {
                 self.node_id = node_id.clone();
@@ -107,9 +108,7 @@ impl HandleMessage for Broadcast {
 
                         outbound_msg_tx.send(
                             envelope
-                        ).unwrap();
-
-                        
+                        ).unwrap();                        
                     }
                 }
                 Ok(())
@@ -119,6 +118,22 @@ impl HandleMessage for Broadcast {
                 if let Some(id) = in_reply_to {
                     self.pending_messages.remove(&(id as usize));
                 }
+                Ok(())
+            },
+
+            Message::Tick {  } => {
+                //resend anything in here that's outside of the timeout
+                let now = Instant::now();
+
+                for el in &mut self.pending_messages {
+                    if el.1.time_sent < now - Duration::from_millis(500) {
+                        el.1.time_sent = Instant::now();
+                        outbound_msg_tx.send(
+                            msg.reply(el.1.message.clone())
+                        ).unwrap();
+                    }
+                }
+
                 Ok(())
             }
 
