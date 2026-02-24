@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::mpsc::Sender, thread, time::{Duration, Instant}};
+use std::{collections::{HashMap, VecDeque}, sync::mpsc::Sender, thread, time::{Duration, Instant}};
 use serde::{Deserialize, Serialize};
 
 /*
@@ -28,11 +28,6 @@ pub enum Message {
     #[serde(rename = "init_ok")]
     InitOk { in_reply_to: Option<usize> },
 
-    #[serde(rename = "broadcast")]
-    Broadcast { message: i32, msg_id: Option<usize> },
-    #[serde(rename = "broadcast_ok")]
-    BroadcastOk { in_reply_to: Option<usize> },
-
     #[serde(rename = "read")]
     Read { msg_id: usize },
     #[serde(rename = "read_ok")]
@@ -55,7 +50,7 @@ pub enum Message {
 
 #[derive(Debug, Clone)]
 pub struct PendingMessage {
-    message: i32,
+    delta: i32,
     time_sent: Instant,
     dest: String,
 }
@@ -66,7 +61,7 @@ pub struct GrowOnlyCounter {
     //send pings to retry messages
     node_id: String,
     counter: usize,
-    pending_messages: HashMap<usize, PendingMessage>,
+    pending_messages: VecDeque<PendingMessage>,
 }
 
 
@@ -119,6 +114,8 @@ impl HandleMessage for GrowOnlyCounter{
                         pending.time_sent = Instant::now();
                         outbound_msg_tx
                             .send(Envelope {
+                                //instead of broadcast, we'd want to requeue the add
+                                //also we'd want the adds to apply in a queue 
                                 src: self.node_id.clone(),
                                 dest: pending.dest.clone(),
                                 body: Message::Broadcast {
