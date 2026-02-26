@@ -58,25 +58,43 @@ pub enum Message {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum KVMessage {
-    #[serde(rename = "read")]
-    KVRead {
-
+    Read {
+        key: String,
+        msg_id: usize,
     },
-    #[serde(rename = "read_ok")]
-    KVReadOk {
-
+    ReadOk {
+        value: usize,
+        in_reply_to: usize,
     },
 
-    #[serde(rename = "cas")]
-    KVCas {
-
+    Write {
+        key: String,
+        value: usize,
+        msg_id: usize,
     },
-    #[serde(rename = "cas_ok")]
-    KVCasOk {
+    WriteOk {
+        in_reply_to: usize,
+    },
 
-    },    
-    
+    Cas {
+        key: String,
+        from: usize,
+        to: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        create_if_not_exists: Option<bool>,
+        msg_id: usize,
+    },
+    CasOk {
+        in_reply_to: usize,
+    },
+
+    Error {
+        in_reply_to: usize,
+        code: usize,
+        text: String,
+    },
 }
 
 
