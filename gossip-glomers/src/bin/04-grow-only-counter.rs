@@ -32,9 +32,17 @@ pub enum Message {
     Read { msg_id: usize },
     #[serde(rename = "read_ok")]
     ReadOk {
-        messages: Vec<i32>,
+        value: usize,
         in_reply_to: Option<usize>,
     },
+
+    #[serde(rename = "add")]
+    Add { 
+        msg_id: usize, 
+        delta: usize,
+    },
+    #[serde(rename = "add_ok")]
+    AddOk { value: usize },    
 
     #[serde(rename = "topology")]
     Topology {
@@ -47,6 +55,30 @@ pub enum Message {
     #[serde(rename = "tick")]
     Tick {},
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum KVMessage {
+    #[serde(rename = "read")]
+    KVRead {
+
+    },
+    #[serde(rename = "read_ok")]
+    KVReadOk {
+
+    },
+
+    #[serde(rename = "cas")]
+    KVCas {
+
+    },
+    #[serde(rename = "cas_ok")]
+    KVCasOk {
+
+    },    
+    
+}
+
 
 #[derive(Debug, Clone)]
 pub struct PendingMessage {
@@ -109,7 +141,7 @@ impl HandleMessage for GrowOnlyCounter{
                 let now = Instant::now();
                 let timeout = Duration::from_millis(500);
 
-                for (id, pending) in &mut self.pending_messages {
+                for (pending) in &mut self.pending_messages {
                     if now.duration_since(pending.time_sent) >= timeout {
                         pending.time_sent = Instant::now();
                         outbound_msg_tx
@@ -118,8 +150,8 @@ impl HandleMessage for GrowOnlyCounter{
                                 //also we'd want the adds to apply in a queue 
                                 src: self.node_id.clone(),
                                 dest: pending.dest.clone(),
-                                body: Message::Broadcast {
-                                    message: pending.message,
+                                body: Message:: {
+                                    message: pending.,
                                     msg_id: Some(*id),
                                 },
                             })
