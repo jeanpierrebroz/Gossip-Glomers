@@ -103,6 +103,7 @@ pub struct PendingMessage {
     delta: i32,
     time_sent: Instant,
     dest: String,
+    msg_id: usize
 }
 
 #[derive(Debug, Default)]
@@ -112,6 +113,7 @@ pub struct GrowOnlyCounter {
     node_id: String,
     counter: usize,
     pending_messages: VecDeque<PendingMessage>,
+    current_count: usize
 }
 
 
@@ -168,7 +170,7 @@ impl HandleMessage for GrowOnlyCounter{
                                 //also we'd want the adds to apply in a queue 
                                 src: self.node_id.clone(),
                                 dest: pending.dest.clone(),
-                                body: Message:: {
+                                body: KVMessage::Cas { key: (), from: (), to: self., create_if_not_exists: Some(true), msg_id: pending.msg_id } {
                                     message: pending.,
                                     msg_id: Some(*id),
                                 },
