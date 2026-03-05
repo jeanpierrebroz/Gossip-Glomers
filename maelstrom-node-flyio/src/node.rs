@@ -1,9 +1,16 @@
-use std::thread;
-
+use std::{collections::HashMap, thread};
+use tokio::sync::oneshot;
+use serde_json::Value;
 use crate::protocol::envelope::Envelope;
 
+pub struct Node {
+    node_id: String,
+    //keep track of outbound messages by msg id
+    outbound_messages: HashMap<usize, Envelope<Value>>
+}
+
 pub fn run() {
-    //handle Init and InitOk messages
+    //handle Init + InitOk
     thread::spawn(move || {
                     loop {
                         thread::sleep(Duration::from_millis(500));
