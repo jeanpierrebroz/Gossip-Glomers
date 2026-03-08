@@ -1,10 +1,9 @@
 use serde::{Serialize, Deserialize};
-use serde_json::Value;
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Envelope<Value> {
+pub struct Envelope<B> {
     src: String,
     dest: String,
-    body: Value
+    body: B
 }
