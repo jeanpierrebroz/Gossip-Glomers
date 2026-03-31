@@ -6,7 +6,7 @@ use crate::protocol::{InternalBody, envelope::Envelope};
 pub struct Node<B> {
     pub(crate) node_id: Mutex<Option<String>>,
     pub(crate) msg_id: AtomicUsize,
-    pub(crate) waiting_room: Mutex<HashMap<usize, oneshot::Sender<InternalBody<B>>>>,
+    pub(crate) pending_messages: Mutex<HashMap<usize, oneshot::Sender<InternalBody<B>>>>,
     pub(crate) handler: Arc<dyn crate::protocol::client::Handler<B>>,
 }
 
@@ -19,7 +19,7 @@ where B: Serialize + DeserializeOwned + Send + Sync + 'static
     
             match msg.body {
                 InternalBody::ReadOk { value, in_reply_to } => {
-                    let mut room = self.waiting_room.lock().await;
+                    let mut room = self.pending_messages.lock().await;
                     if let Some(tx) = room.remove(&in_reply_to) {
                         let _ = tx.send(InternalBody::ReadOk { value, in_reply_to });
                     }
