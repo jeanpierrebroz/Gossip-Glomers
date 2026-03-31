@@ -1,10 +1,22 @@
 use std::io::{self, BufRead};
+use serde::{Deserialize, de::DeserializeOwned};
+use serde_json::Value;
 
 fn main() {
-    println!("Hello, world!");
     read();
 }
 
+enum SystemType {
+    Init,
+    InitOk
+}
+
+#[derive(Deserialize)]
+enum MessageType<B> {
+    Init,
+    InitOk,
+    
+}
 
 
 fn read() {
