@@ -50,12 +50,14 @@ mod tests {
     
     #[test]
     fn test_input() {
-        let (sender, recv) = channel();
+        let (sender, receiver) = channel();
         let input = "line one\nline two\n";
         let reader = input.as_bytes();
         read(reader, sender);
         
+        assert_eq!(receiver.recv().unwrap(), "line one");
         
-        
+        assert_ne!(receiver.recv().unwrap(), "line one");
     }
+    
 }
