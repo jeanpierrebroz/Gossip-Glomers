@@ -43,6 +43,8 @@ fn read<R: BufRead>(reader: R, sender: Sender<String>) {
     }
 }
 
+//next tests: pass in user-defined enum and ensure correct types are sent through receiver. ensure it panics if unknown type is encountered
+
 
 #[cfg(test)]
 mod tests {
