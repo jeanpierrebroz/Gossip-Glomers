@@ -1,36 +1,61 @@
-use std::io::{self, BufRead};
-use serde::{Deserialize, de::DeserializeOwned};
-use serde_json::Value;
+use std::io::BufRead;
 
-fn main() {
-    read();
-}
+use std::sync::mpsc::{
+    channel,
+    Sender
+};
 
 enum SystemType {
     Init,
     InitOk
+}   
+
+struct BaseMessage<T> {
+    src: String,
+    dest: String,
+    body: T
 }
 
-#[derive(Deserialize)]
-enum MessageType<B> {
-    Init,
-    InitOk,
+struct Init {
     
 }
 
 
-fn read() {
-    let stdin = io::stdin();
+fn main() {
+    let (sender, _recv) = channel();
+    read(std::io::stdin().lock(), sender);
+}
 
-    for line in stdin.lock().lines() {
-        match &line {
+
+fn read<R: BufRead>(reader: R, sender: Sender<String>) {
+    
+    for line in reader.lines() {
+        match line {
             Ok(s) => {
-                println!("Read line: {:?}", s);
+                let _ = sender.send(s);
             }
 
-            Err(s) => {
-                println!("Couldn't read line: {:?}", s);
+            Err(_s) => {
+                panic!("Unexpected input type found, panicking. Ensure you're covering all possible input types. ");
+
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_input() {
+        let (sender, recv) = channel();
+        let input = "line one\nline two\n";
+        let reader = input.as_bytes();
+        read(reader, sender);
+        
+        
+        
     }
 }
