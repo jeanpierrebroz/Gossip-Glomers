@@ -1,4 +1,6 @@
 use std::io::BufRead;
+use serde::{Deserialize, Serialize};
+
 
 use std::sync::mpsc::{
     channel,
@@ -10,14 +12,26 @@ enum SystemType {
     InitOk
 }   
 
-struct BaseMessage<T> {
-    src: String,
-    dest: String,
-    body: T
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Message<T> {
+    pub src: String,
+    pub dest: String,
+    pub body: Body<T>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Body<T> {
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    pub msg_id: Option<usize>,
+    pub in_reply_to: Option<usize>,
+    #[serde(flatten)]
+    pub contents: T,
 }
 
 struct Init {
-    
+    node_id: String,
+    node_ids: Vec<String>
 }
 
 
@@ -33,11 +47,11 @@ fn read<R: BufRead>(reader: R, sender: Sender<String>) {
         match line {
             Ok(s) => {
                 let _ = sender.send(s);
+                //handle mapping types in the receiver
             }
 
-            Err(_s) => {
-                panic!("Unexpected input type found, panicking. Ensure you're covering all possible input types. ");
-
+            Err(s) => {
+                panic!("Something went horribly wrong reading input: {}", s);
             }
         }
     }
@@ -52,6 +66,18 @@ mod tests {
     
     #[test]
     fn test_input() {
+        let (sender, receiver) = channel();
+        let input = "line one\nline two\n";
+        let reader = input.as_bytes();
+        read(reader, sender);
+        
+        assert_eq!(receiver.recv().unwrap(), "line one");
+        
+        assert_ne!(receiver.recv().unwrap(), "line one");
+    }
+    
+    #[test]
+    fn test_type_mapping() {
         let (sender, receiver) = channel();
         let input = "line one\nline two\n";
         let reader = input.as_bytes();
