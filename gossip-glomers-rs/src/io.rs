@@ -1,3 +1,35 @@
+use serde::{Deserialize, Serialize};
+use std::io::{BufRead, Stdout};
+use std::sync::mpsc::{Sender, channel};
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum MessageType<T> {
+    Init {
+        node_id: String,
+        node_ids: Vec<String>,
+    },
+    InitOk,
+    #[serde(untagged)]
+    Custom(T)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Message<T> {
+    pub src: String,
+    pub dest: String,
+    pub body: Body<T>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Body<T> {
+    pub msg_id: Option<usize>,
+    pub in_reply_to: Option<usize>,
+    #[serde(flatten)]
+    pub contents: T,
+}
+
+
 fn read<R: BufRead>(reader: R, sender: Sender<String>) {
     for line in reader.lines() {
         match line {
