@@ -1,17 +1,20 @@
 use serde::{Deserialize, Serialize};
-use std::io::BufRead;
+use std::io::{BufRead, Stdout};
 
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Sender, channel};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
-enum MessageType {
+enum MessageType<T> {
     Init {
         node_id: String,
         node_ids: Vec<String>,
     },
     InitOk,
+    #[serde(flatten)]
+    Custom(T)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -105,9 +108,21 @@ mod tests {
 }
 
 struct Node {
-    id: Option<usize>,
-    node_ids: Option<Vec<String>>,
-    msg_counter: AtomicUsize,
+    pub id: Arc<Mutex<String>>,
+    pub node_ids: Arc<Mutex<Vec<String>>>,
+    msg_counter: Arc<AtomicUsize>,
+    writer: Arc<Mutex<Stdout>>
+}
+
+impl<T> Clone for Node<T> {
+    fn clone(&self) -> Self {
+        Self {
+            id: Arc::clone(&self.id),
+            node_ids: Arc::clone(&self.node_ids),
+            msg_counter: Arc::clone(&self.msg_counter),
+            writer: Arc::clone(&self.writer),
+        }
+    }
 }
 
 fn parse<T>(message: &str) -> Message<T>
