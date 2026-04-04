@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::io::BufRead;
 
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Sender, channel};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
-enum SystemType {
+enum MessageType {
     Init {
         node_id: String,
         node_ids: Vec<String>,
@@ -28,12 +29,6 @@ pub struct Body<T> {
     pub contents: T,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "snake_case")]
-struct Init {
-    node_id: String,
-    node_ids: Vec<String>,
-}
 
 fn main() {
     let (sender, _recv) = channel();
@@ -75,11 +70,11 @@ mod tests {
             }
         }"#;
 
-        let msg: Message<SystemType> = parse(input);
+        let msg: Message<MessageType> = parse(input);
 
         assert_eq!(msg.src, "c1");
         match msg.body.contents {
-            SystemType::Init { ref node_id, .. } => assert_eq!(node_id, "n1"),
+            MessageType::Init { ref node_id, .. } => assert_eq!(node_id, "n1"),
             _ => panic!("Expected Init variant"),
         }
     }
@@ -98,15 +93,21 @@ mod tests {
         }"#;
 
         //this should trigger the panic inside the parse function
-        let _: Message<SystemType> = parse(input);
+        let _: Message<MessageType> = parse(input);
     }
 
     #[test]
     #[should_panic]
     fn test_parse_malformed_json_panics() {
         let input = r#"{"src": "broken", "body": "not_an_object"}"#;
-        let _: Message<SystemType> = parse(input);
+        let _: Message<MessageType> = parse(input);
     }
+}
+
+struct Node {
+    id: Option<usize>,
+    node_ids: Option<Vec<String>>,
+    msg_counter: AtomicUsize,
 }
 
 fn parse<T>(message: &str) -> Message<T>
@@ -118,3 +119,8 @@ where
         Err(e) => panic!("Parsing failed: {}. Input was: {}", e, message),
     }
 }
+
+
+// TODO: create node struct
+// TODO: pass unhandled system types to user-defined handler
+// TODO: auto-set the old msg_id to be in reply to the message they're replying to
