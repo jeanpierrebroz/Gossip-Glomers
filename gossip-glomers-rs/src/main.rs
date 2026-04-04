@@ -144,6 +144,11 @@ impl<T> Node<T> {
     }
 }
 
+pub trait HandleMessage {
+    type Message: serde::de::DeserializeOwned + Serialize + Send + 'static;
+    fn handle(&mut self, node: Node<Self::Message>, msg::Mess)
+}
+
 fn parse<T>(message: &str) -> Message<T>
 where
     T: serde::de::DeserializeOwned,
