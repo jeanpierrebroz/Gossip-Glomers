@@ -1,6 +1,12 @@
-struct Node {
-    pub id: Arc<Mutex<String>>,
-    pub node_ids: Arc<Mutex<Vec<String>>>,
+use std::marker::PhantomData;
+use std::io::Stdout;
+use std::sync::atomic::AtomicUsize;
+use std::sync::{Mutex, Arc};
+
+
+struct Node<T> {
+    pub id: Option<String>,
+    pub node_ids: Option<Vec<String>>,
     msg_counter: Arc<AtomicUsize>,
     writer: Arc<Mutex<Stdout>>,
     _phantom: PhantomData<T>,
@@ -9,7 +15,7 @@ struct Node {
 impl<T> Clone for Node<T> {
     fn clone(&self) -> Self {
         Self {
-            id: Arc::clone(&self.id),
+            id: &self.id,
             node_ids: Arc::clone(&self.node_ids),
             msg_counter: Arc::clone(&self.msg_counter),
             writer: Arc::clone(&self.writer),
@@ -21,7 +27,7 @@ impl<T> Clone for Node<T> {
 impl<T> Node<T> {
     pub fn new(id: String, node_ids: Vec<String>) -> Self {
         Self {
-            id: Arc::new(Mutex::new(id)),
+            id: &id
             node_ids: Arc::new(Mutex::new(node_ids)),
             msg_counter: Arc::new(AtomicUsize::new(1)),
             writer: Arc::new(Mutex::new(std::io::stdout())),
