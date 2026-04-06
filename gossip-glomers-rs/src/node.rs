@@ -2,9 +2,10 @@ use std::marker::PhantomData;
 use std::io::Stdout;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Mutex, Arc};
+use std::sync::atomic::Ordering;
 
 
-struct Node<T> {
+pub struct Node<T> {
     pub id: Option<String>,
     pub node_ids: Option<Vec<String>>,
     msg_counter: Arc<AtomicUsize>,
@@ -15,8 +16,8 @@ struct Node<T> {
 impl<T> Clone for Node<T> {
     fn clone(&self) -> Self {
         Self {
-            id: &self.id,
-            node_ids: Arc::clone(&self.node_ids),
+            id: self.id.clone(),
+            node_ids: self.node_ids.clone(),
             msg_counter: Arc::clone(&self.msg_counter),
             writer: Arc::clone(&self.writer),
             _phantom: PhantomData
@@ -27,8 +28,8 @@ impl<T> Clone for Node<T> {
 impl<T> Node<T> {
     pub fn new(id: String, node_ids: Vec<String>) -> Self {
         Self {
-            id: &id
-            node_ids: Arc::new(Mutex::new(node_ids)),
+            id: Some(id),
+            node_ids: Some(node_ids),
             msg_counter: Arc::new(AtomicUsize::new(1)),
             writer: Arc::new(Mutex::new(std::io::stdout())),
             _phantom: PhantomData,

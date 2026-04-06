@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::io::{BufRead, Stdout};
-use std::sync::mpsc::{Sender, channel};
+use std::io::{BufRead};
+use std::sync::mpsc::{Sender};
+use crate::node::Node;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -65,7 +66,7 @@ mod tests {
             }
         }"#;
 
-        let msg: Message<MessageType> = parse(input);
+        let msg: Message<MessageType<String>> = parse(input);
 
         assert_eq!(msg.src, "c1");
         match msg.body.contents {
@@ -88,14 +89,14 @@ mod tests {
         }"#;
 
         //this should trigger the panic inside the parse function
-        let _: Message<MessageType> = parse(input);
+        let _: Message<MessageType<String>> = parse(input);
     }
 
     #[test]
     #[should_panic]
     fn test_parse_malformed_json_panics() {
         let input = r#"{"src": "broken", "body": "not_an_object"}"#;
-        let _: Message<MessageType> = parse(input);
+        let _: Message<MessageType<String>> = parse(input);
     }
 }
 
