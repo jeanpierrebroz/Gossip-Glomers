@@ -2,18 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{BufRead};
 use std::sync::mpsc::{Sender};
 use crate::node::Node;
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum MessageType<T> {
-    Init {
-        node_id: String,
-        node_ids: Vec<String>,
-    },
-    InitOk,
-    #[serde(untagged)]
-    Custom(T)
-}
+use crate::protocol::Protocol;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message<T> {
@@ -102,7 +91,7 @@ mod tests {
 
 pub trait HandleMessage {
     type Message: serde::de::DeserializeOwned + Serialize + Send + 'static;
-    fn handle(&mut self, node: Node<Self::Message>, msg::Mess)
+    fn handle(&mut self, node: Node<Self::Protocol>, T)
 }
 
 fn parse<T>(message: &str) -> Message<T>
