@@ -8,8 +8,8 @@ use std::sync::mpsc::{Sender, channel};
 
 
 fn main() {
-    let (sender, _recv) = channel();
-    read(std::io::stdin().lock(), sender);
+    let (sender, _recv) = channel::<String>();
+    // read(std::io::stdin().lock(), sender);
 }
 
 

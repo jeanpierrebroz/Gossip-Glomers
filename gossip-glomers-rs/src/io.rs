@@ -55,11 +55,11 @@ mod tests {
             }
         }"#;
 
-        let msg: Message<MessageType<String>> = parse(input);
+        let msg: Message<Protocol> = parse(input);
 
         assert_eq!(msg.src, "c1");
         match msg.body.contents {
-            MessageType::Init { ref node_id, .. } => assert_eq!(node_id, "n1"),
+            Protocol::Init { ref node_id, .. } => assert_eq!(node_id, "n1"),
             _ => panic!("Expected Init variant"),
         }
     }
@@ -78,20 +78,20 @@ mod tests {
         }"#;
 
         //this should trigger the panic inside the parse function
-        let _: Message<MessageType<String>> = parse(input);
+        let _: Message<Protocol> = parse(input);
     }
 
     #[test]
     #[should_panic]
     fn test_parse_malformed_json_panics() {
         let input = r#"{"src": "broken", "body": "not_an_object"}"#;
-        let _: Message<MessageType<String>> = parse(input);
+        let _: Message<Protocol> = parse(input);
     }
 }
 
 pub trait HandleMessage {
     type Message: serde::de::DeserializeOwned + Serialize + Send + 'static;
-    fn handle(&mut self, node: Node<Self::Protocol>, T)
+    fn handle(&mut self, node: Node<Protocol>);
 }
 
 fn parse<T>(message: &str) -> Message<T>
