@@ -1,13 +1,14 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
+use std::ops::Add;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Instant, Duration};
 
-use crate::io::{Message, send};
+use crate::io::{Message};
 use crate::protocol::Protocol;
 
 pub struct Node {
@@ -80,7 +81,7 @@ impl Node {
                                     entry.retry_count += 1;
                                     let backoff = config.timeout_ms * config.backoff_multiplier.pow(entry.retry_count as u32);
                                     entry.retry_at = now + Duration::from_millis(backoff as u64);
-                                    send(&entry.msg);
+                                    write_message(&entry.msg);
                                     heap.push((Reverse(entry.retry_at), msg_id));
                                 }
                             }
@@ -89,13 +90,34 @@ impl Node {
                             retry_at - now
                         }
                     } else {
-                        Duration::from_millis(50) // nothing pending, check back soon
+                        Duration::from_millis(50) 
                     }
                 };
                 thread::sleep(sleep_duration);
             }
         });
     }
+    
+    //how do I make sure the node's send method pops/adds messages?
+    // maybe one send method on node that adds, then another that actually writes?
+    pub fn send(&self, msg: &Message<Protocol>) {
+        let mut map = self.pending_message_map.lock().unwrap();
+        let mut heap = self.pending_message_heap.lock().unwrap();
+        
+        let copy = msg.clone();
+        let retry_at = Instant::now() + Duration::from_millis(500);
+                
+        let pending_msg = PendingMessage {msg: copy, retry_count: 0, retry_at: retry_at };
+        
+        map.insert(msg.body.msg_id, pending_msg);
+        heap.push(());
+    }
+    
 }
 
+fn write_message(msg: &Message<Protocol>) {
+    let out = std::io::stdout().lock();
+    serde_json::to_writer(out, msg).unwrap();
+    println!();
+}
 //TODO: SeqKV and write a lot of tests

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::io::BufRead;
 use std::sync::mpsc::Sender;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message<T> {
     pub src: String,
     pub dest: String,
@@ -25,7 +25,7 @@ impl Message<Protocol> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Body<T> {
     pub msg_id: usize,
     pub in_reply_to: Option<usize>,
@@ -149,11 +149,4 @@ where
         Ok(msg) => msg,
         Err(e) => panic!("Parsing failed: {}. Input was: {}", e, message),
     }
-}
-
-
-pub fn send(msg: &Message<Protocol>) {
-    let out = std::io::stdout().lock();
-    serde_json::to_writer(out, msg).unwrap();
-    println!();
 }
