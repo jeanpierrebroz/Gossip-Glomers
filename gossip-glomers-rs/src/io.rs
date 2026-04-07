@@ -63,6 +63,28 @@ mod tests {
             _ => panic!("Expected Init variant"),
         }
     }
+    
+    #[test]
+    fn test_parse_valid_read() {
+        //real message from maelstrom
+        let input = r#"{
+            "src": "c1",
+            "dest": "n1",
+            "body": {
+                "type": "read_ok",
+                "messages": [1, 2, 3]
+            }
+        }"#;
+
+        let msg: Message<Protocol> = parse(input);
+
+        assert_eq!(msg.src, "c1");
+        let correct: Vec<usize> = vec![1, 2, 3];
+        match msg.body.contents {
+            Protocol::ReadOk { ref messages, .. } => assert_eq!(messages, &correct),
+            _ => panic!("Expected Init variant"),
+        }
+    }
 
     #[test]
     #[should_panic]
