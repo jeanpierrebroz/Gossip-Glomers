@@ -137,10 +137,10 @@ mod tests {
 
 pub trait HandleMessage {
     type Message: serde::de::DeserializeOwned + Serialize + Send + 'static;
-    fn handle(&mut self, node: Node<Protocol>);
+    fn handle(&mut self, node: Node);
 }
 
-fn parse<T>(message: &str) -> Message<T>
+pub fn parse<T>(message: &str) -> Message<T>
 where
     T: serde::de::DeserializeOwned,
 {
