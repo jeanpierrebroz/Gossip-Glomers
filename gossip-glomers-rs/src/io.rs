@@ -33,22 +33,6 @@ pub struct Body<T> {
     pub contents: T,
 }
 
-fn read<R: BufRead>(reader: R, sender: Sender<String>) {
-    for line in reader.lines() {
-        match line {
-            Ok(s) => {
-                let _ = sender.send(s);
-                //handle mapping types in the receiver
-            }
-
-            Err(s) => {
-                panic!("Something went horribly wrong reading input: {}", s);
-            }
-        }
-    }
-}
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
