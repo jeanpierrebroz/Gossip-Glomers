@@ -30,7 +30,7 @@ fn run<H: Handler>(mut handler: H) {
             _ => {
                 let n = node.as_ref().expect("received message before Init");
                 if let Some(response) = handler.handle(msg, n) {
-                    // send response
+                    //TODO: send response
                 }
             }
         }
