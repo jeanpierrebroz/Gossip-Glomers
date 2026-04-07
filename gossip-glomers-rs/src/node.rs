@@ -1,10 +1,8 @@
-use crate::protocol::Protocol;
 use crate::io::Message;
+use crate::protocol::Protocol;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc};
 use std::sync::atomic::Ordering;
-use std::io::Write;
-
 
 pub struct Node {
     pub id: String,
@@ -23,12 +21,6 @@ impl Node {
     pub fn get_next_msg_id(&self) -> usize {
         self.msg_counter.fetch_add(1, Ordering::SeqCst)
     }
-    
-    pub fn send(&self, msg: &Message<Protocol>) {
-        let mut out = std::io::stdout().lock();
-        serde_json::to_writer(&mut out, msg).unwrap();
-        writeln!(out).unwrap();
-    }
 }
 
 impl Clone for Node {
@@ -36,8 +28,7 @@ impl Clone for Node {
         Self {
             id: self.id.clone(),
             node_ids: self.node_ids.clone(),
-            msg_counter: Arc::clone(&self.msg_counter)
+            msg_counter: Arc::clone(&self.msg_counter),
         }
     }
 }
-

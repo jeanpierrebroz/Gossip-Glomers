@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::io::{BufRead};
-use std::sync::mpsc::{Sender};
 use crate::node::Node;
 use crate::protocol::Protocol;
+use serde::{Deserialize, Serialize};
+use std::io::BufRead;
+use std::sync::mpsc::Sender;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message<T> {
@@ -11,14 +11,27 @@ pub struct Message<T> {
     pub body: Body<T>,
 }
 
+impl Message<Protocol> {
+    pub fn reply(&self, contents: Protocol, msg_id: usize) -> Message<Protocol> {
+        Message {
+            src: self.dest.clone(),
+            dest: self.src.clone(),
+            body: Body {
+                msg_id: msg_id,
+                in_reply_to: Some(self.body.msg_id),
+                contents,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Body<T> {
-    pub msg_id: Option<usize>,
+    pub msg_id: usize,
     pub in_reply_to: Option<usize>,
     #[serde(flatten)]
     pub contents: T,
 }
-
 
 fn read<R: BufRead>(reader: R, sender: Sender<String>) {
     for line in reader.lines() {
@@ -63,7 +76,7 @@ mod tests {
             _ => panic!("Expected Init variant"),
         }
     }
-    
+
     #[test]
     fn test_parse_valid_read() {
         //real message from maelstrom
@@ -72,7 +85,8 @@ mod tests {
             "dest": "n1",
             "body": {
                 "type": "read_ok",
-                "messages": [1, 2, 3]
+                "messages": [1, 2, 3],
+                "msg_id": 1
             }
         }"#;
 
@@ -85,7 +99,7 @@ mod tests {
             _ => panic!("Expected Init variant"),
         }
     }
-    
+
     #[test]
     fn test_parse_valid_read_kv() {
         //real message from maelstrom
@@ -94,7 +108,8 @@ mod tests {
             "dest": "n1",
             "body": {
                 "type": "read_ok",
-                "value": 1234
+                "value": 1234,
+                "msg_id": 1
             }
         }"#;
 
@@ -102,10 +117,13 @@ mod tests {
 
         assert_eq!(msg.src, "seq-kv");
         match msg.body.contents {
-            Protocol::ReadOk { value: Some(ref value), .. } => {
+            Protocol::ReadOk {
+                value: Some(ref value),
+                ..
+            } => {
                 let count = value.as_u64().expect("value should be a number") as usize;
                 assert_eq!(count, 1234);
-            },
+            }
             _ => panic!("Expected Init variant"),
         }
     }
@@ -150,6 +168,4 @@ where
     }
 }
 
-
-
-//user takes 
+//user takes
