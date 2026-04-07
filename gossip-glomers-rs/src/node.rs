@@ -24,28 +24,45 @@ struct PendingMessage {
     retry_at: Instant
 }
 
+#[derive(Clone)]
 pub struct RpcRetryConfig {
     pub timeout_ms: usize,
     pub max_retries: usize,
     pub backoff_multiplier: usize
 }
 
+impl Default for RpcRetryConfig {
+    fn default() -> Self {
+        Self {
+            timeout_ms: 1000,
+            max_retries: 3,
+            backoff_multiplier: 2,
+        }
+    }
+}
+
 
 impl Node {
-    pub fn new(id: String, node_ids: Vec<String>) -> Self {
-        Self {
+    pub fn new(id: String, node_ids: Vec<String>, config: RpcRetryConfig) -> Self {
+        let pending_message_heap = Arc::new(Mutex::new(BinaryHeap::new()));
+        let pending_message_map = Arc::new(Mutex::new(HashMap::new()));
+        
+        let node = Self {
             id,
             node_ids,
             msg_counter: Arc::new(AtomicUsize::new(1)),
-            pending_message_heap: Arc::new(Mutex::new(BinaryHeap::new())),
-            pending_message_map: Arc::new(Mutex::new(HashMap::new())),
-        }
+            pending_message_heap: Arc::clone(&pending_message_heap),
+            pending_message_map: Arc::clone(&pending_message_map),
+        };
+                
+        Node::start_callback_loop(config, Arc::clone(&pending_message_map), Arc::clone(&pending_message_heap));
+        node
     }
     pub fn get_next_msg_id(&self) -> usize {
         self.msg_counter.fetch_add(1, Ordering::SeqCst)
     }
     
-    fn start_callback_loop(config: Arc<RpcRetryConfig>, pending: Arc<Mutex<HashMap<usize, PendingMessage>>>, heap: Arc<Mutex<BinaryHeap<(Reverse<Instant>, usize)>>>) {
+    fn start_callback_loop(config: RpcRetryConfig, pending: Arc<Mutex<HashMap<usize, PendingMessage>>>, heap: Arc<Mutex<BinaryHeap<(Reverse<Instant>, usize)>>>) {
         thread::spawn(move || {
             loop {
                 let sleep_duration = {
