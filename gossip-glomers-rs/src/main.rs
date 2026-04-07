@@ -7,7 +7,7 @@ use gossip_glomers_rs::node::Node;
 use gossip_glomers_rs::protocol::Protocol;
 
 pub trait Handler {
-    fn handle(&mut self, msg: Message<Protocol>, node: &Node) -> Option<Protocol>;
+    fn handle(&mut self, msg: Message<Protocol>, node: &Node);
 }
 
 fn run<H: Handler>(mut handler: H) {
@@ -29,9 +29,7 @@ fn run<H: Handler>(mut handler: H) {
             Protocol::InitOk => {} // ignore
             _ => {
                 let n = node.as_ref().expect("received message before Init");
-                if let Some(response) = handler.handle(msg, n) {
-                    //TODO: send response
-                }
+                handler.handle(msg, n);
             }
         }
     }
@@ -42,3 +40,5 @@ fn send(msg: &Message<Protocol>) {
     serde_json::to_writer(out, msg).unwrap();
     println!();
 }
+
+
