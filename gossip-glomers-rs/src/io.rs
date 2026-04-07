@@ -81,7 +81,7 @@ mod tests {
         assert_eq!(msg.src, "c1");
         let correct: Vec<usize> = vec![1, 2, 3];
         match msg.body.contents {
-            Protocol::ReadOk { ref messages, .. } => assert_eq!(messages, &correct),
+            Protocol::ReadOk { ref messages, .. } => assert_eq!(messages, &Some(correct)),
             _ => panic!("Expected Init variant"),
         }
     }
@@ -90,20 +90,22 @@ mod tests {
     fn test_parse_valid_read_kv() {
         //real message from maelstrom
         let input = r#"{
-            "src": "c1",
+            "src": "seq-kv",
             "dest": "n1",
             "body": {
                 "type": "read_ok",
-                "messages": [1, 2, 3]
+                "value": 1234
             }
         }"#;
 
         let msg: Message<Protocol> = parse(input);
 
-        assert_eq!(msg.src, "c1");
-        let correct: Vec<usize> = vec![1, 2, 3];
+        assert_eq!(msg.src, "seq-kv");
         match msg.body.contents {
-            Protocol::ReadOk { ref messages, .. } => assert_eq!(messages, &correct),
+            Protocol::ReadOk { value: Some(ref value), .. } => {
+                let count = value.as_u64().expect("value should be a number") as usize;
+                assert_eq!(count, 1234);
+            },
             _ => panic!("Expected Init variant"),
         }
     }

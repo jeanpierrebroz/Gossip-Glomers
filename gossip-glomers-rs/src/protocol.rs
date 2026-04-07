@@ -28,7 +28,13 @@ pub enum Protocol {
     Broadcast { message: usize },
     BroadcastOk,
     Read,
-    ReadOk { messages: Vec<usize> },
+    #[serde(rename = "read_ok")]
+    ReadOk {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        messages: Option<Vec<usize>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<serde_json::Value>,
+    },
     Topology { 
         topology: std::collections::HashMap<String, Vec<String>> 
     },
@@ -49,10 +55,6 @@ pub enum Protocol {
         to: serde_json::Value 
     },
     CasOk,
-    
-    #[serde(rename = "read_ok")]
-    ReadValueOk { value: serde_json::Value },
-    
     
     // challenge 5
     Send { key: String, msg: Value },
