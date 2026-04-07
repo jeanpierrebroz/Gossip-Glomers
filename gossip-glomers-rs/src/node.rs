@@ -1,5 +1,3 @@
-use crate::io::Message;
-use crate::protocol::Protocol;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -8,6 +6,7 @@ pub struct Node {
     pub id: String,
     pub node_ids: Vec<String>,
     msg_counter: Arc<AtomicUsize>,
+    //probably add pending messages here?
 }
 
 impl Node {
@@ -23,12 +22,5 @@ impl Node {
     }
 }
 
-impl Clone for Node {
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id.clone(),
-            node_ids: self.node_ids.clone(),
-            msg_counter: Arc::clone(&self.msg_counter),
-        }
-    }
-}
+//need to decide if I put the seq-kv method on node or in it's own things
+//will probably do node so I can just reuse pending messages
