@@ -2,7 +2,7 @@ fn main() {}
 
 use std::io::BufRead;
 
-use gossip_glomers_rs::io::{Message, parse};
+use gossip_glomers_rs::io::{Message, parse, send};
 use gossip_glomers_rs::node::Node;
 use gossip_glomers_rs::protocol::Protocol;
 
@@ -34,11 +34,3 @@ fn run<H: Handler>(mut handler: H) {
         }
     }
 }
-
-fn send(msg: &Message<Protocol>) {
-    let out = std::io::stdout().lock();
-    serde_json::to_writer(out, msg).unwrap();
-    println!();
-}
-
-

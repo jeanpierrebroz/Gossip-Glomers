@@ -150,3 +150,10 @@ where
         Err(e) => panic!("Parsing failed: {}. Input was: {}", e, message),
     }
 }
+
+
+pub fn send(msg: &Message<Protocol>) {
+    let out = std::io::stdout().lock();
+    serde_json::to_writer(out, msg).unwrap();
+    println!();
+}
