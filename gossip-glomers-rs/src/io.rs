@@ -1,14 +1,17 @@
 use crate::node::Node;
 use crate::protocol::Protocol;
 use serde::{Deserialize, Serialize};
-use std::io::BufRead;
-use std::sync::mpsc::Sender;
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message<T> {
     pub src: String,
     pub dest: String,
     pub body: Body<T>,
+}
+
+pub trait Handler {
+    fn handle(&mut self, msg: Message<Protocol>, node: &Node);
 }
 
 impl Message<Protocol> {
@@ -134,11 +137,6 @@ mod tests {
         let input = r#"{"src": "broken", "body": "not_an_object"}"#;
         let _: Message<Protocol> = parse(input);
     }
-}
-
-pub trait HandleMessage {
-    type Message: serde::de::DeserializeOwned + Serialize + Send + 'static;
-    fn handle(&mut self, node: Node);
 }
 
 pub fn parse<T>(message: &str) -> Message<T>

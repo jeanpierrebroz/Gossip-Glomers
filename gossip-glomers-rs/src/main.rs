@@ -1,14 +1,10 @@
 fn main() {}
 
 use std::io::BufRead;
-
+use gossip_glomers_rs::io::Handler;
 use gossip_glomers_rs::io::{Message, parse};
 use gossip_glomers_rs::node::{Node, RpcRetryConfig};
 use gossip_glomers_rs::protocol::Protocol;
-
-pub trait Handler {
-    fn handle(&mut self, msg: Message<Protocol>, node: &Node);
-}
 
 fn run<H: Handler>(mut handler: H, rpc_retry_config: Option<RpcRetryConfig>) {
     let stdin = std::io::stdin();
@@ -30,7 +26,7 @@ fn run<H: Handler>(mut handler: H, rpc_retry_config: Option<RpcRetryConfig>) {
                 n.send(reply);
                 node = Some(n);
             }
-            Protocol::InitOk => {} // ignore
+            Protocol::InitOk => {}
             _ => {
                 let n = node.as_ref().expect("received message before Init");
                 handler.handle(msg, n);
