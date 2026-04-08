@@ -2,7 +2,7 @@ fn main() {}
 
 use std::io::BufRead;
 
-use gossip_glomers_rs::io::{Message, parse, send};
+use gossip_glomers_rs::io::{Message, parse};
 use gossip_glomers_rs::node::{Node, RpcRetryConfig};
 use gossip_glomers_rs::protocol::Protocol;
 
@@ -27,7 +27,7 @@ fn run<H: Handler>(mut handler: H, rpc_retry_config: Option<RpcRetryConfig>) {
                 
                 let id = n.get_next_msg_id();
                 let reply = msg.reply(Protocol::InitOk, id);
-                send(&reply);
+                n.send(reply);
                 node = Some(n);
             }
             Protocol::InitOk => {} // ignore

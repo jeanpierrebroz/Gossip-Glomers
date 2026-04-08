@@ -100,17 +100,20 @@ impl Node {
     
     //how do I make sure the node's send method pops/adds messages?
     // maybe one send method on node that adds, then another that actually writes?
-    pub fn send(&self, msg: &Message<Protocol>) {
+    pub fn send(&self, msg: Message<Protocol>) {
         let mut map = self.pending_message_map.lock().unwrap();
         let mut heap = self.pending_message_heap.lock().unwrap();
         
-        let copy = msg.clone();
+        
+        write_message(&msg);
         let retry_at = Instant::now() + Duration::from_millis(500);
                 
-        let pending_msg = PendingMessage {msg: copy, retry_count: 0, retry_at: retry_at };
+        let pending_msg = PendingMessage {msg: msg, retry_count: 0, retry_at: retry_at };
         
-        map.insert(msg.body.msg_id, pending_msg);
-        heap.push(());
+        heap.push((Reverse(retry_at), pending_msg.msg.body.msg_id));
+        
+        map.insert(pending_msg.msg.body.msg_id, pending_msg);
+
     }
     
 }
