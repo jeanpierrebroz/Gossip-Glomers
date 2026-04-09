@@ -15,10 +15,10 @@ pub trait Handler {
 }
 
 impl Message<Protocol> {
-    pub fn reply(&self, contents: Protocol, msg_id: usize) -> Message<Protocol> {
+    pub fn reply(self, contents: Protocol, msg_id: usize) -> Message<Protocol> {
         Message {
-            src: self.dest.clone(),
-            dest: self.src.clone(),
+            src: self.dest,
+            dest: self.src,
             body: Body {
                 msg_id: msg_id,
                 in_reply_to: Some(self.body.msg_id),

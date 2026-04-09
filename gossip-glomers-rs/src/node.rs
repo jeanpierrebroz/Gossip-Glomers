@@ -1,35 +1,39 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
-use std::ops::Add;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Instant, Duration};
 
-use crate::io::{Message};
+use crate::io::Message;
 use crate::protocol::Protocol;
+
+struct PendingMessages {
+    map: HashMap<usize, PendingMessage>,
+    heap: BinaryHeap<(Reverse<Instant>, usize)>,
+}
 
 pub struct Node {
     pub id: String,
     pub node_ids: Vec<String>,
     msg_counter: Arc<AtomicUsize>,
-    pending_message_map: Arc<Mutex<HashMap<usize, PendingMessage>>>,
-    pending_message_heap: Arc<Mutex<BinaryHeap<(Reverse<Instant>, usize)>>>,
+    pending: Arc<Mutex<PendingMessages>>,
 }
 
 struct PendingMessage {
     msg: Message<Protocol>,
     retry_count: usize,
-    retry_at: Instant
+    retry_at: Instant,
 }
 
 #[derive(Clone)]
 pub struct RpcRetryConfig {
     pub timeout_ms: usize,
     pub max_retries: usize,
-    pub backoff_multiplier: usize
+    pub backoff_multiplier: usize,
 }
 
 impl Default for RpcRetryConfig {
@@ -42,85 +46,81 @@ impl Default for RpcRetryConfig {
     }
 }
 
-
 impl Node {
     pub fn new(id: String, node_ids: Vec<String>, config: RpcRetryConfig) -> Self {
-        let pending_message_heap = Arc::new(Mutex::new(BinaryHeap::new()));
-        let pending_message_map = Arc::new(Mutex::new(HashMap::new()));
-        
+        let pending = Arc::new(Mutex::new(PendingMessages {
+            map: HashMap::new(),
+            heap: BinaryHeap::new(),
+        }));
+
         let node = Self {
             id,
             node_ids,
             msg_counter: Arc::new(AtomicUsize::new(1)),
-            pending_message_heap: Arc::clone(&pending_message_heap),
-            pending_message_map: Arc::clone(&pending_message_map),
+            pending: Arc::clone(&pending),
         };
-                
-        Node::start_callback_loop(config, Arc::clone(&pending_message_map), Arc::clone(&pending_message_heap));
+
+        Node::start_callback_loop(config, Arc::clone(&pending));
         node
     }
+
     pub fn get_next_msg_id(&self) -> usize {
         self.msg_counter.fetch_add(1, Ordering::SeqCst)
     }
-    
-    fn start_callback_loop(config: RpcRetryConfig, pending: Arc<Mutex<HashMap<usize, PendingMessage>>>, heap: Arc<Mutex<BinaryHeap<(Reverse<Instant>, usize)>>>) {
+
+    fn start_callback_loop(config: RpcRetryConfig, pending: Arc<Mutex<PendingMessages>>) {
         thread::spawn(move || {
             loop {
                 let sleep_duration = {
-                    let mut heap = heap.lock().unwrap();
-                    if let Some((Reverse(retry_at), msg_id)) = heap.peek().copied() {
+                    let mut pending = pending.lock().unwrap();
+                    if let Some((Reverse(retry_at), msg_id)) = pending.heap.peek().copied() {
                         let now = Instant::now();
                         if retry_at <= now {
-                            heap.pop();
-                            let mut pending = pending.lock().unwrap();
-                            if let Some(entry) = pending.get_mut(&msg_id) {
-                                if entry.retry_count >= config.max_retries {
+                            pending.heap.pop();
+                            let timed_out = pending.map.get(&msg_id)
+                                .map(|e| e.retry_count >= config.max_retries)
+                                .unwrap_or(false);
+
+                            if timed_out {
+                                if let Some(entry) = pending.map.remove(&msg_id) {
                                     eprintln!("RPC {} to {} timed out", msg_id, entry.msg.dest);
-                                    pending.remove(&msg_id);
-                                } else {
-                                    entry.retry_count += 1;
-                                    let backoff = config.timeout_ms * config.backoff_multiplier.pow(entry.retry_count as u32);
-                                    entry.retry_at = now + Duration::from_millis(backoff as u64);
-                                    write_message(&entry.msg);
-                                    heap.push((Reverse(entry.retry_at), msg_id));
                                 }
+                            } else if let Some(entry) = pending.map.get_mut(&msg_id) {
+                                entry.retry_count += 1;
+                                let backoff = config.timeout_ms
+                                    * config.backoff_multiplier.pow(entry.retry_count as u32);
+                                entry.retry_at = now + Duration::from_millis(backoff as u64);
+                                write_message(&entry.msg);
+                                let new_retry_at = entry.retry_at;
+                                // map borrow ends here
+                                pending.heap.push((Reverse(new_retry_at), msg_id));
                             }
                             Duration::from_millis(0)
                         } else {
                             retry_at - now
                         }
                     } else {
-                        Duration::from_millis(50) 
+                        Duration::from_millis(50)
                     }
                 };
                 thread::sleep(sleep_duration);
             }
         });
     }
-    
-    //how do I make sure the node's send method pops/adds messages?
-    // maybe one send method on node that adds, then another that actually writes?
-    pub fn send(&self, msg: Message<Protocol>) {
-        let mut map = self.pending_message_map.lock().unwrap();
-        let mut heap = self.pending_message_heap.lock().unwrap();
-        
-        
-        write_message(&msg);
-        let retry_at = Instant::now() + Duration::from_millis(500);
-                
-        let pending_msg = PendingMessage {msg: msg, retry_count: 0, retry_at: retry_at };
-        
-        heap.push((Reverse(retry_at), pending_msg.msg.body.msg_id));
-        
-        map.insert(pending_msg.msg.body.msg_id, pending_msg);
 
+    pub fn send(&self, msg: Message<Protocol>) {
+        let mut pending = self.pending.lock().unwrap();
+        let retry_at = Instant::now() + Duration::from_millis(500);
+        let msg_id = msg.body.msg_id;
+
+        write_message(&msg);
+        pending.heap.push((Reverse(retry_at), msg_id));
+        pending.map.insert(msg_id, PendingMessage { msg, retry_count: 0, retry_at });
     }
-    
 }
 
 fn write_message(msg: &Message<Protocol>) {
-    let out = std::io::stdout().lock();
-    serde_json::to_writer(out, msg).unwrap();
-    println!();
+    let mut out = std::io::stdout().lock();
+    serde_json::to_writer(&mut out, msg).unwrap();
+    writeln!(out).unwrap();
 }
-//TODO: SeqKV and write a lot of tests
