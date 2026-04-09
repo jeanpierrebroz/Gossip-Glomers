@@ -5,7 +5,7 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Protocol {
-    // setup messages
+    // setup
     Init {
         node_id: String,
         node_ids: Vec<String>,
@@ -15,7 +15,6 @@ pub enum Protocol {
         code: u16,
         text: String,
     },
-
     // challenge 1
     Echo {
         echo: String,
@@ -23,49 +22,48 @@ pub enum Protocol {
     EchoOk {
         echo: String,
     },
-
     // challenge 2
     Generate,
     GenerateOk {
         id: String,
     },
-
     // challenge 3
     Broadcast {
         message: usize,
     },
     BroadcastOk,
+    BroadcastMany {
+        messages: Vec<usize>,
+    },
+    BroadcastManyOk,
     Read,
     #[serde(rename = "read_ok")]
     ReadOk {
         #[serde(skip_serializing_if = "Option::is_none")]
         messages: Option<Vec<usize>>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        value: Option<serde_json::Value>,
+        value: Option<Value>,
     },
     Topology {
-        topology: std::collections::HashMap<String, Vec<String>>,
+        topology: HashMap<String, Vec<String>>,
     },
     TopologyOk,
-
-    // challenge 4 (KV)
+    // challenge 4
     Add {
         delta: usize,
     },
     AddOk,
-
     Write {
         key: String,
-        value: serde_json::Value,
+        value: Value,
     },
     WriteOk,
     Cas {
         key: String,
-        from: serde_json::Value,
-        to: serde_json::Value,
+        from: Value,
+        to: Value,
     },
     CasOk,
-
     // challenge 5
     Send {
         key: String,
@@ -90,11 +88,10 @@ pub enum Protocol {
         offsets: HashMap<String, usize>,
     },
     CommitOffsetsOk,
-
     Txn {
-        txn: Vec<(String, String, serde_json::Value)>,
+        txn: Vec<(String, String, Value)>,
     },
     TxnOk {
-        txn: Vec<(String, String, serde_json::Value)>,
+        txn: Vec<(String, String, Value)>,
     },
 }

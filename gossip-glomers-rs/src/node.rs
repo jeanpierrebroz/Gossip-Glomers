@@ -20,8 +20,20 @@ pub struct Node {
     pub id: String,
     pub node_ids: Vec<String>,
     msg_counter: Arc<AtomicUsize>,
-    pending: Arc<Mutex<PendingMessages>>,
     config: RpcRetryConfig,
+    pending: Arc<Mutex<PendingMessages>>,
+}
+
+impl Clone for Node {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            node_ids: self.node_ids.clone(),
+            msg_counter: Arc::clone(&self.msg_counter),
+            config: self.config.clone(),
+            pending: Arc::clone(&self.pending),
+        }
+    }
 }
 
 struct PendingMessage {
@@ -58,8 +70,8 @@ impl Node {
             id,
             node_ids,
             msg_counter: Arc::new(AtomicUsize::new(1)),
+            config: config.clone(),
             pending: Arc::clone(&pending),
-            config: config.clone()
         };
 
         Node::start_callback_loop(config, Arc::clone(&pending));
@@ -82,7 +94,7 @@ impl Node {
 
                             if !pending.map.contains_key(&msg_id) {
                                 continue;
-                            };
+                            }
 
                             let timed_out = pending
                                 .map
@@ -117,36 +129,32 @@ impl Node {
     }
 
     pub fn send(&self, msg: Message<Protocol>) {
+        let mut pending = self.pending.lock().unwrap();
+        let msg_id = msg.body.msg_id;
+
         write_message(&msg);
-        
-        //only retry for messages that are sent, not replies
+
         if msg.body.in_reply_to.is_some() {
-            return;
+            return; 
         }
         
-        let mut pending = self.pending.lock().unwrap();
-        let retry_at = Instant::now() + Duration::from_millis(self.config.timeout_ms as u64);
-        let msg_id = msg.body.msg_id;
-        pending.heap.push((Reverse(retry_at), msg_id));
-        pending.map.insert(
-            msg_id,
-            PendingMessage {
-                msg,
-                retry_count: 0,
-                retry_at,
-            },
-        );
+            let retry_at = Instant::now() + Duration::from_millis(self.config.timeout_ms as u64);
+            pending.heap.push((Reverse(retry_at), msg_id));
+            pending.map.insert(
+                msg_id,
+                PendingMessage {
+                    msg,
+                    retry_count: 0,
+                    retry_at,
+                },
+            );
     }
 
-    pub fn ack(&self, msg_id: &usize) {
-        //lazily removes the heap entry on next check
+    pub fn ack(&self, msg_id: usize) {
         let mut pending = self.pending.lock().unwrap();
-        pending.map.remove_entry(msg_id);
+        pending.map.remove(&msg_id);
     }
-}
 
-#[cfg(feature = "testing")]
-impl Node {
     pub fn pending_count(&self) -> usize {
         self.pending.lock().unwrap().map.len()
     }
