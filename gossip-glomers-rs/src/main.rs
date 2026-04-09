@@ -13,8 +13,9 @@ fn run<H: Handler>(mut handler: H, rpc_retry_config: Option<RpcRetryConfig>) {
     for line in stdin.lock().lines() {
         let line = line.expect("failed to read line");
         let msg: Message<Protocol> = parse(&line);
-
-        //TODO: ACK here
+        
+        let n = node.as_ref().expect("received message before Init");
+        n.ack(&msg.body.msg_id);
 
         match &msg.body.contents {
             Protocol::Init { node_id, node_ids } => {
@@ -31,8 +32,6 @@ fn run<H: Handler>(mut handler: H, rpc_retry_config: Option<RpcRetryConfig>) {
             }
             Protocol::InitOk => {}
             _ => {
-                let n = node.as_ref().expect("received message before Init");
-                n.ack(&msg.body.msg_id);
                 handler.handle(msg, n);
             }
         }

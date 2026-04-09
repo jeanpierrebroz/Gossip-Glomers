@@ -21,6 +21,7 @@ pub struct Node {
     pub node_ids: Vec<String>,
     msg_counter: Arc<AtomicUsize>,
     pending: Arc<Mutex<PendingMessages>>,
+    config: RpcRetryConfig,
 }
 
 struct PendingMessage {
@@ -58,6 +59,7 @@ impl Node {
             node_ids,
             msg_counter: Arc::new(AtomicUsize::new(1)),
             pending: Arc::clone(&pending),
+            config: config.clone()
         };
 
         Node::start_callback_loop(config, Arc::clone(&pending));
@@ -116,7 +118,7 @@ impl Node {
 
     pub fn send(&self, msg: Message<Protocol>) {
         let mut pending = self.pending.lock().unwrap();
-        let retry_at = Instant::now() + Duration::from_millis(500);
+        let retry_at = Instant::now() + Duration::from_millis(self.config.timeout_ms as u64);
         let msg_id = msg.body.msg_id;
 
         write_message(&msg);
