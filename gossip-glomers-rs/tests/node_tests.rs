@@ -1,5 +1,6 @@
 use gossip_glomers_rs::node::Node;
 use gossip_glomers_rs::protocol::{Protocol, Protocol::Echo};
+use gossip_glomers_rs::io::Body;
 
 use gossip_glomers_rs::io::{Handler, Message};
 struct EchoHandler {}
@@ -18,22 +19,23 @@ impl Handler for EchoHandler {
     }
 }
 
+fn make_msg(contents: Protocol) -> Message<Protocol> {
+    Message {
+        src: "c1".to_string(),
+        dest: "n1".to_string(),
+        body: Body {
+            msg_id: 1,
+            in_reply_to: None,
+            contents,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use gossip_glomers_rs::io::{Body, Message};
 
-    fn make_msg(contents: Protocol) -> Message<Protocol> {
-        Message {
-            src: "c1".to_string(),
-            dest: "n1".to_string(),
-            body: Body {
-                msg_id: 1,
-                in_reply_to: None,
-                contents,
-            },
-        }
-    }
 
     #[test]
     fn test_echo_reply_contents() {
@@ -92,5 +94,75 @@ mod tests {
         let mut handler = EchoHandler {};
         let msg = make_msg(Protocol::Generate);
         handler.handle(msg, &node);
+    }
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+    use std::time::Duration;
+    use gossip_glomers_rs::node::RpcRetryConfig;
+
+    fn make_node(timeout_ms: usize, max_retries: usize) -> Node {
+        Node::new(
+            "n1".to_string(),
+            vec![],
+            RpcRetryConfig {
+                timeout_ms,
+                max_retries,
+                backoff_multiplier: 2,
+            },
+        )
+    }
+
+    #[test]
+    fn test_send_adds_to_pending() {
+        let node = make_node(1000, 3);
+        let msg = make_msg(Protocol::Echo { echo: "hi".to_string() });
+        node.send(msg);
+        assert_eq!(node.pending_count(), 1);
+    }
+
+    #[test]
+    fn test_ack_removes_from_pending() {
+        let node = make_node(1000, 3);
+        let msg = make_msg(Protocol::Echo { echo: "hi".to_string() });
+        let msg_id = msg.body.msg_id;
+        node.send(msg);
+        assert_eq!(node.pending_count(), 1);
+        node.ack(&msg_id);
+        assert_eq!(node.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_ack_nonexistent_is_noop() {
+        let node = make_node(1000, 3);
+        node.ack(&999);
+        assert_eq!(node.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_retry_loop_drops_after_max_retries() {
+        let node = make_node(50, 2); 
+        let msg = make_msg(Protocol::Echo { echo: "hi".to_string() });
+        node.send(msg);
+        assert_eq!(node.pending_count(), 1);
+
+        std::thread::sleep(Duration::from_millis(1500));
+        assert_eq!(node.pending_count(), 0);
+        
+    }
+
+    #[test]
+    fn test_acked_message_not_retried() {
+        let node = make_node(50, 3);
+        let msg = make_msg(Protocol::Echo { echo: "hi".to_string() });
+        let msg_id = msg.body.msg_id;
+        node.send(msg);
+        node.ack(&msg_id);
+
+        std::thread::sleep(Duration::from_millis(400));
+
+        assert_eq!(node.pending_count(), 0);
     }
 }

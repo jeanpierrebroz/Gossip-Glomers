@@ -2,11 +2,11 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use crate::io::Message;
 use crate::protocol::Protocol;
@@ -77,7 +77,14 @@ impl Node {
                         let now = Instant::now();
                         if retry_at <= now {
                             pending.heap.pop();
-                            let timed_out = pending.map.get(&msg_id)
+
+                            if !pending.map.contains_key(&msg_id) {
+                                continue;
+                            };
+
+                            let timed_out = pending
+                                .map
+                                .get(&msg_id)
                                 .map(|e| e.retry_count >= config.max_retries)
                                 .unwrap_or(false);
 
@@ -92,7 +99,6 @@ impl Node {
                                 entry.retry_at = now + Duration::from_millis(backoff as u64);
                                 write_message(&entry.msg);
                                 let new_retry_at = entry.retry_at;
-                                // map borrow ends here
                                 pending.heap.push((Reverse(new_retry_at), msg_id));
                             }
                             Duration::from_millis(0)
@@ -115,7 +121,31 @@ impl Node {
 
         write_message(&msg);
         pending.heap.push((Reverse(retry_at), msg_id));
-        pending.map.insert(msg_id, PendingMessage { msg, retry_count: 0, retry_at });
+        pending.map.insert(
+            msg_id,
+            PendingMessage {
+                msg,
+                retry_count: 0,
+                retry_at,
+            },
+        );
+    }
+
+    pub fn ack(&self, msg_id: &usize) {
+        //lazily removes the heap entry on next check
+        let mut pending = self.pending.lock().unwrap();
+        pending.map.remove_entry(msg_id);
+    }
+}
+
+#[cfg(feature = "testing")]
+impl Node {
+    pub fn pending_count(&self) -> usize {
+        self.pending.lock().unwrap().map.len()
+    }
+
+    pub fn heap_count(&self) -> usize {
+        self.pending.lock().unwrap().heap.len()
     }
 }
 

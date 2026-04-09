@@ -2,7 +2,6 @@ use crate::node::Node;
 use crate::protocol::Protocol;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message<T> {
     pub src: String,
