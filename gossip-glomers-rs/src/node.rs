@@ -120,7 +120,7 @@ impl Node {
         write_message(&msg);
         
         //only retry for messages that are sent, not replies
-        if !msg.body.in_reply_to.is_none() {
+        if msg.body.in_reply_to.is_some() {
             return;
         }
         
