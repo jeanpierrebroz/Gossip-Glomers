@@ -34,7 +34,7 @@ fn make_msg(contents: Protocol) -> Message<Protocol> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gossip_glomers_rs::io::{Body, Message};
+    
 
 
     #[test]
