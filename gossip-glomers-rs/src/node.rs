@@ -117,11 +117,16 @@ impl Node {
     }
 
     pub fn send(&self, msg: Message<Protocol>) {
+        write_message(&msg);
+        
+        //only retry for messages that are sent, not replies
+        if !msg.body.in_reply_to.is_none() {
+            return;
+        }
+        
         let mut pending = self.pending.lock().unwrap();
         let retry_at = Instant::now() + Duration::from_millis(self.config.timeout_ms as u64);
         let msg_id = msg.body.msg_id;
-
-        write_message(&msg);
         pending.heap.push((Reverse(retry_at), msg_id));
         pending.map.insert(
             msg_id,
