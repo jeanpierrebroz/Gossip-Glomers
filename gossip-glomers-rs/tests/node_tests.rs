@@ -148,7 +148,7 @@ mod retry_tests {
         node.send(msg);
         assert_eq!(node.pending_count(), 1);
 
-        std::thread::sleep(Duration::from_millis(1500));
+        std::thread::sleep(Duration::from_secs(1));
         assert_eq!(node.pending_count(), 0);
         
     }
