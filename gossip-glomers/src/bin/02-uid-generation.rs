@@ -1,82 +1,26 @@
-use core::panic;
-use maelstrom_common::{Envelope, HandleMessage, run};
-use serde::{Deserialize, Serialize};
+use gossip_glomers_rs::io::{Handler, Message};
+use gossip_glomers_rs::node::Node;
+use gossip_glomers_rs::protocol::Protocol;
+use gossip_glomers_rs::run;
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum Message {
-    #[serde(rename = "init")]
-    Init {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        msg_id: Option<usize>,
-        node_id: String,
-    },
-    #[serde(rename = "init_ok")]
-    InitOk {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        in_reply_to: Option<usize>,
-    },
-    #[serde(rename = "generate_ok")]
-    GenerateOk {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        in_reply_to: Option<usize>,
-        id: String,
-    },
-    #[serde(rename = "generate")]
-    Generate { msg_id: usize },
+struct UidHandler {
+    counter: u64,
 }
 
-#[derive(Debug, Default)]
-pub struct UID {
-    node_id: String,
-    counter: u32,
-}
-
-impl HandleMessage for UID {
-    type Message = Message;
-    type Error = std::io::Error;
-
-    fn handle_message(
-        &mut self,
-        msg: Envelope<Self::Message>,
-        outbound_msg_tx: std::sync::mpsc::Sender<Envelope<Self::Message>>,
-    ) -> Result<(), Self::Error> {
-        match msg.body {
-            Message::Init {
-                msg_id,
-                ref node_id,
-            } => {
-                self.node_id = node_id.clone();
-                outbound_msg_tx
-                    .send(msg.reply(Message::InitOk {
-                        in_reply_to: msg_id,
-                    }))
-                    .unwrap();
-                Ok(())
-            }
-
-            Message::Generate { msg_id } => {
-                let id = format!("{}-{}", self.node_id, self.counter);
-                outbound_msg_tx
-                    .send(msg.reply(Message::GenerateOk {
-                        id: id,
-                        in_reply_to: Some(msg_id),
-                    }))
-                    .unwrap();
+impl Handler<Protocol> for UidHandler {
+    fn handle(&mut self, msg: Message<Protocol>, node: &Node) {
+        let (build_reply, contents) = msg.into_reply(node.get_next_msg_id());
+        match contents {
+            Protocol::Generate => {
+                let id = format!("{}-{}", node.id, self.counter);
                 self.counter += 1;
-                Ok(())
+                node.send(build_reply(Protocol::GenerateOk { id }));
             }
-            _ => panic!(
-                "{}",
-                format!(
-                    "Unexpected message: {:#?}",
-                    serde_json::to_string_pretty(&msg)
-                )
-            ),
+            _ => panic!("Unexpected message type"),
         }
     }
 }
 
 fn main() {
-    let _ = run(UID::default());
+    run(UidHandler { counter: 0 }, None);
 }
