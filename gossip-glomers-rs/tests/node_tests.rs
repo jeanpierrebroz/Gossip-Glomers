@@ -4,7 +4,7 @@ use gossip_glomers_rs::io::{Body, Handler, Message};
 
 struct EchoHandler;
 
-impl Handler for EchoHandler {
+impl Handler<Protocol> for EchoHandler {
     fn handle(&mut self, msg: Message<Protocol>, node: &Node) {
         let (build_reply, contents) = msg.into_reply(node.get_next_msg_id());
         match contents {

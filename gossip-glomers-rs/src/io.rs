@@ -2,8 +2,8 @@ use crate::node::Node;
 use crate::protocol::Protocol;
 use serde::{Deserialize, Serialize};
 
-pub trait Handler {
-    fn handle(&mut self, msg: Message<Protocol>, node: &Node);
+pub trait Handler<T> {
+    fn handle(&mut self, msg: Message<T>, node: &Node);
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
